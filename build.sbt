@@ -1,6 +1,15 @@
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import akka._
 
+val akkaStream =
+  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-stream")
+
+val akkaStreamTestkit =
+  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-stream-testkit")
+
+val akkaMultiNodeTestkit =
+  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-multi-node-testkit")
+
 inThisBuild(Def.settings(
   organization := "com.typesafe.akka",
   organizationName := "Lightbend",
@@ -67,23 +76,23 @@ lazy val parsing = project("akka-parsing")
 lazy val httpCore = project("akka-http-core")
   .settings(Dependencies.httpCore)
   .settings(Version.versionSettings)
-  .dependsOn(parsing)
+  .dependsOn(parsing, akkaStream, akkaStreamTestkit % "test")
   //.disablePlugins(MimaPlugin)
 
 lazy val http = project("akka-http")
   .dependsOn(httpCore)
 
 lazy val http2Support = project("akka-http2-support")
-  .dependsOn(httpCore, httpTestkit % "test", httpCore % "test->test")
+  .dependsOn(httpCore, httpTestkit % "test", httpCore % "test->test", akkaStreamTestkit % "test")
 
 lazy val httpTestkit = project("akka-http-testkit")
   .settings(Dependencies.httpTestkit)
-  .dependsOn(http)
+  .dependsOn(http, akkaStreamTestkit)
 
 lazy val httpTests = project("akka-http-tests")
   .settings(Dependencies.httpTests)
   .dependsOn(httpSprayJson, httpXml, httpJackson,
-    httpTestkit % "test", httpCore % "test->test")
+    httpTestkit % "test", httpCore % "test->test", akkaMultiNodeTestkit % "test")
   .enablePlugins(NoPublish).disablePlugins(BintrayPlugin) // don't release tests
   .enablePlugins(MultiNode)
   .disablePlugins(MimaPlugin) // this is only tests
