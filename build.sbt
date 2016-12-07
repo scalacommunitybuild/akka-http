@@ -1,14 +1,21 @@
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
 import akka._
 
+val akkaRef = {
+  // as a little hacky side effect also disable aggregation of samples
+  sys.props += "akka.build.aggregateSamples" -> "false"
+
+  uri("git://github.com/akka/akka.git#release-2.4")
+}
+
 val akkaStream =
-  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-stream")
+  ProjectRef(akkaRef, "akka-stream")
 
 val akkaStreamTestkit =
-  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-stream-testkit")
+  ProjectRef(akkaRef, "akka-stream-testkit")
 
 val akkaMultiNodeTestkit =
-  ProjectRef(uri("git://github.com/akka/akka.git#release-2.4"), "akka-multi-node-testkit")
+  ProjectRef(akkaRef, "akka-multi-node-testkit")
 
 inThisBuild(Def.settings(
   organization := "com.typesafe.akka",
