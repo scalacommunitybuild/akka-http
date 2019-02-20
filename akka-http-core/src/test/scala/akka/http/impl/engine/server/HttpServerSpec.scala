@@ -1061,7 +1061,7 @@ class HttpServerSpec extends AkkaSpec(
       "have a programmatically set timeout handler" in assertAllStagesStopped(new RequestTimeoutTestSetup(400.millis) {
         send("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
         val timeoutResponse = HttpResponse(StatusCodes.InternalServerError, entity = "OOPS!")
-        expectRequest().header[`Timeout-Access`].foreach(_.timeoutAccess.updateHandler(_ ⇒ timeoutResponse))
+        expectRequest().header[`Timeout-Access`].foreach(_.timeoutAccess.updateHandler((_: HttpRequest) ⇒ timeoutResponse))
 
         scheduler.timePasses(500.millis)
         expectResponseWithWipedDate(
@@ -1098,9 +1098,34 @@ class HttpServerSpec extends AkkaSpec(
           |
           |""")
 
-      netIn.sendComplete()
       requests.expectComplete()
       netOut.expectComplete()
+      netIn.sendComplete()
+    })
+
+    "add `Connection: close` to early responses if HttpResponse includes `Connection: keep-alive` header" in assertAllStagesStopped(new TestSetup {
+      send("""POST / HTTP/1.1
+             |Host: example.com
+             |Content-Length: 100000
+             |
+             |""")
+
+      val HttpRequest(POST, _, _, entity, _) = expectRequest()
+      responses.sendNext(HttpResponse(status = StatusCodes.InsufficientStorage, headers = Connection("keep-alive") :: Nil))
+      entity.dataBytes.runWith(Sink.ignore)
+
+      expectResponseWithWipedDate(
+        """HTTP/1.1 507 Insufficient Storage
+          |Server: akka-http/test
+          |Date: XXXX
+          |Connection: close
+          |Content-Length: 0
+          |
+          |""")
+
+      requests.expectComplete()
+      netOut.expectComplete()
+      netIn.sendComplete()
     })
 
     "support request length verification" which afterWord("is defined via") {

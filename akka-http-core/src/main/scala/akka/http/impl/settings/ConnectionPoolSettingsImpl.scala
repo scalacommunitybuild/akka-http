@@ -5,7 +5,7 @@
 package akka.http.impl.settings
 
 import akka.annotation.InternalApi
-import akka.http.impl.util.{ SettingsCompanion, _ }
+import akka.http.impl.util._
 import akka.http.scaladsl.settings.{ ClientConnectionSettings, ConnectionPoolSettings, PoolImplementation }
 import com.typesafe.config.Config
 
@@ -58,23 +58,23 @@ private[akka] final case class ConnectionPoolSettingsImpl(
 
 /** INTERNAL API */
 @InternalApi
-private[akka] object ConnectionPoolSettingsImpl extends SettingsCompanion[ConnectionPoolSettingsImpl]("akka.http.host-connection-pool") {
-  def fromSubConfig(root: Config, c: Config) = {
+private[akka] object ConnectionPoolSettingsImpl extends SettingsCompanionImpl[ConnectionPoolSettingsImpl]("akka.http.host-connection-pool") {
+  def fromSubConfig(root: Config, c: Config): ConnectionPoolSettingsImpl = {
     new ConnectionPoolSettingsImpl(
-      c getInt "max-connections",
-      c getInt "min-connections",
-      c getInt "max-retries",
-      c getInt "max-open-requests",
-      c getInt "pipelining-limit",
-      c getFiniteDuration "base-connection-backoff",
-      c getFiniteDuration "max-connection-backoff",
-      c getPotentiallyInfiniteDuration "idle-timeout",
+      c.getInt("max-connections"),
+      c.getInt("min-connections"),
+      c.getInt("max-retries"),
+      c.getInt("max-open-requests"),
+      c.getInt("pipelining-limit"),
+      c.getFiniteDuration("base-connection-backoff"),
+      c.getFiniteDuration("max-connection-backoff"),
+      c.getPotentiallyInfiniteDuration("idle-timeout"),
       ClientConnectionSettingsImpl.fromSubConfig(root, c.getConfig("client")),
       c.getString("pool-implementation").toLowerCase match {
         case "legacy" ⇒ PoolImplementation.Legacy
         case "new"    ⇒ PoolImplementation.New
       },
-      c getPotentiallyInfiniteDuration "response-entity-subscription-timeout"
+      c.getPotentiallyInfiniteDuration("response-entity-subscription-timeout")
     )
   }
 }

@@ -41,7 +41,7 @@ class MarshallingSpec extends FreeSpec with Matchers with BeforeAndAfterAll with
     }
     "FormDataMarshaller should marshal FormData instances to application/x-www-form-urlencoded content" in {
       marshal(FormData(Map("name" → "Bob", "pass" → "hällo", "admin" → ""))) shouldEqual
-        HttpEntity(`application/x-www-form-urlencoded` withCharset `UTF-8`, "name=Bob&pass=h%C3%A4llo&admin=")
+        HttpEntity(`application/x-www-form-urlencoded`, "name=Bob&pass=h%C3%A4llo&admin=")
     }
   }
 
@@ -202,7 +202,10 @@ class MarshallingSpec extends FreeSpec with Matchers with BeforeAndAfterAll with
   override def afterAll() = TestKit.shutdownActorSystem(system)
 
   protected class FixedRandom extends java.util.Random {
-    override def nextBytes(array: Array[Byte]): Unit = "my-stable-boundary".getBytes("UTF-8").copyToArray(array)
+    override def nextBytes(array: Array[Byte]): Unit = {
+      val bytes = "my-stable-boundary".getBytes("UTF-8")
+      bytes.copyToArray(array, 0, bytes.length)
+    }
   }
   override protected val multipartBoundaryRandom = new FixedRandom // fix for stable value
 }

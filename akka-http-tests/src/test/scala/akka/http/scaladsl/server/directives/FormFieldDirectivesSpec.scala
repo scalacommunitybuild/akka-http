@@ -126,9 +126,11 @@ class FormFieldDirectivesSpec extends RoutingSpec {
       val charset = HttpCharsets.`UTF-8`
       val render: StringRendering = UriRendering.renderQuery(new StringRendering, urlEncodedForm.fields, charset.nioCharset, CharacterClasses.unreserved)
       val streamingForm: RequestEntity = HttpEntity.Chunked(
-        `application/x-www-form-urlencoded` withCharset charset,
+        `application/x-www-form-urlencoded`,
         Source.single(ChunkStreamPart(render.get)).via(AllowMaterializationOnlyOnce())
       )
+
+      streamingForm.getContentType shouldEqual ContentTypes.`application/x-www-form-urlencoded`
       Post("/", streamingForm) ~> {
         formFields('firstName, "age".as[Int], 'sex.?, "VIP" ? false) { (firstName, age, sex, vip) ⇒
           complete(firstName + age + sex + vip)
@@ -197,9 +199,16 @@ class FormFieldDirectivesSpec extends RoutingSpec {
 
   "The 'formFieldMap' directive" should {
     "extract fields with different keys" in {
+      var res: Map[String, String] = null
+
       Post("/", FormData("age" → "42", "numberA" → "3", "numberB" → "5")) ~> {
-        formFieldMap { echoComplete }
-      } ~> check { responseAs[String] shouldEqual "Map(age -> 42, numberA -> 3, numberB -> 5)" }
+        formFieldMap { map ⇒
+          res = map
+          completeOk
+        }
+      } ~> check {
+        res shouldEqual Map("age" -> "42", "numberA" -> "3", "numberB" -> "5")
+      }
     }
     "not show bad performance characteristics when field names' hashCodes collide" in {
       val numKeys = 10000
@@ -247,9 +256,16 @@ class FormFieldDirectivesSpec extends RoutingSpec {
 
   "The 'formFieldMultiMap' directive" should {
     "extract fields with different keys (with duplicates)" in {
+      var res: Map[String, List[String]] = null
+
       Post("/", FormData("age" → "42", "number" → "3", "number" → "5")) ~> {
-        formFieldMultiMap { echoComplete }
-      } ~> check { responseAs[String] shouldEqual "Map(age -> List(42), number -> List(5, 3))" }
+        formFieldMultiMap { m ⇒
+          res = m
+          completeOk
+        }
+      } ~> check {
+        res shouldEqual Map("age" -> List("42"), "number" -> List("5", "3"))
+      }
     }
     "not show bad performance characteristics when field names' hashCodes collide" in {
       val numKeys = 10000
