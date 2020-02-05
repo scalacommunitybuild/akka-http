@@ -10,12 +10,12 @@ import java.util.concurrent.CountDownLatch
 import akka.actor.ActorSystem
 import akka.http.caching.scaladsl.CachingSettings
 import akka.testkit.TestKit
-import org.scalatest.matchers.should.Matchers
-import org.scalatest.wordspec.AnyWordSpec
 import org.scalatest.BeforeAndAfterAll
 
 import scala.concurrent.duration._
 import scala.concurrent.{ Await, Future, Promise }
+import org.scalatest.matchers.should.Matchers
+import org.scalatest.wordspec.AnyWordSpec
 
 class ExpiringLfuCacheSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll {
   implicit val system: ActorSystem = ActorSystem()
