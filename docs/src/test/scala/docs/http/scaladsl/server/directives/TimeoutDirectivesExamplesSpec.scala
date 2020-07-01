@@ -34,7 +34,7 @@ class TimeoutDirectivesExamplesSpec extends AkkaSpec(TimeoutDirectivesInfiniteTi
   import system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  def slowFuture(): Future[String] = Promise[String].future // TODO: move to Future.never in Scala 2.12
+  def slowFuture(): Future[String] = Future.never
 
   def runRoute(route: Route, routePath: String): HttpResponse = {
     val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
@@ -164,7 +164,7 @@ class TimeoutDirectivesFiniteTimeoutExamplesSpec extends AkkaSpec(TimeoutDirecti
   import system.dispatcher
   implicit val materializer = ActorMaterializer()
 
-  def slowFuture(): Future[String] = Promise[String].future // TODO: move to Future.never in Scala 2.12
+  def slowFuture(): Future[String] = Future.never
 
   def runRoute(route: Route, routePath: String): HttpResponse = {
     val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
