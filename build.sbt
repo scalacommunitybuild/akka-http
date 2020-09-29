@@ -1,5 +1,4 @@
 import akka._
-import akka.ValidatePullRequest._
 import AkkaDependency._
 import Dependencies.{ h2specName, h2specExe }
 import com.typesafe.sbt.SbtMultiJvm.MultiJvmKeys.MultiJvm
