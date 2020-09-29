@@ -42,7 +42,7 @@ lazy val root = Project(
     id = "akka-http-root",
     base = file(".")
   )
-  .enablePlugins(UnidocRoot, NoPublish, DeployRsync, AggregatePRValidation)
+  .enablePlugins(UnidocRoot, NoPublish, DeployRsync)
   .disablePlugins(BintrayPlugin, MimaPlugin)
   .settings(
     // Unidoc doesn't like macro definitions
@@ -232,7 +232,6 @@ lazy val httpTests = project("akka-http-tests")
   .disablePlugins(MimaPlugin) // this is only tests
   .configs(MultiJvm)
   .settings(headerSettings(MultiJvm))
-  .settings(additionalTasks in ValidatePR += headerCheck in MultiJvm)
   .addAkkaModuleDependency("akka-stream", "provided")
   .addAkkaModuleDependency("akka-multi-node-testkit", "test")
 
@@ -356,7 +355,6 @@ lazy val docs = project("docs")
     ),
     apidocRootPackage := "akka",
     Formatting.docFormatSettings,
-    additionalTasks in ValidatePR += paradox in Compile,
     deployRsyncArtifact := List((paradox in Compile).value -> gustavDir("docs").value),
   )
   .settings(ParadoxSupport.paradoxWithCustomDirectives)
