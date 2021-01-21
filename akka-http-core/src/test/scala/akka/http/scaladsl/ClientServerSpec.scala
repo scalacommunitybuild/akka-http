@@ -16,7 +16,6 @@ import scala.util.{ Success, Try }
 import akka.actor.ActorSystem
 import akka.event.Logging
 import akka.event.Logging.LogEvent
-import akka.http.impl.engine.HttpIdleTimeoutException
 import akka.http.impl.engine.ws.ByteStringSinkProbe
 import akka.http.impl.util._
 import akka.http.scaladsl.Http.ServerBinding
@@ -86,7 +85,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
     }
 
     "report failure if bind fails" in EventFilter[BindException](occurrences = 2).intercept {
-      val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+      val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
       val binding = Http().bind(hostname, port)
       val probe1 = TestSubscriber.manualProbe[Http.IncomingConnection]()
       // Bind succeeded, we have a local address
@@ -128,7 +127,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
     }
 
     "run with bindAndHandleSync" in {
-      val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+      val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
       val binding = Http().bindAndHandleSync(_ => HttpResponse(), hostname, port)
       val b1 = Await.result(binding, 3.seconds.dilated)
 
@@ -140,7 +139,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
     }
 
     "prevent more than the configured number of max-connections with bindAndHandle" in {
-      val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+      val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
       val settings = ServerSettings(system).withMaxConnections(1)
 
       val receivedSlow = Promise[Long]()
@@ -204,7 +203,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
       }
 
       abstract class RemoteAddressTestScenario {
-        val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+        val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
 
         val settings = ServerSettings(system).withRemoteAddressHeader(true)
         def createBinding(): Future[ServerBinding]
@@ -246,7 +245,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
       "support server timeouts" should {
         "close connection with idle client after idleTimeout" in {
           val serverIdleTimeout = 300.millis
-          val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+          val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
           val (receivedRequest: Promise[Long], b1: ServerBinding) = bindServer(hostname, port, serverIdleTimeout)
 
           try {
@@ -312,7 +311,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
           val clientTimeout = 345.millis.dilated
           val clientPoolSettings = cs.withIdleTimeout(clientTimeout)
 
-          val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+          val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
           val (receivedRequest: Promise[Long], b1: ServerBinding) = bindServer(hostname, port, serverTimeout)
 
           try {
@@ -347,7 +346,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
           val clientTimeout = 345.millis.dilated
           val clientPoolSettings = cs.withIdleTimeout(clientTimeout)
 
-          val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+          val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
           val (receivedRequest: Promise[Long], b1: ServerBinding) = bindServer(hostname, port, serverTimeout)
 
           try {
@@ -377,7 +376,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
       "are triggered in `mapMaterialized`" in Utils.assertAllStagesStopped {
         // FIXME racy feature, needs https://github.com/akka/akka/issues/17849 to be fixed
         pending
-        val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+        val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
         val flow = Flow[HttpRequest].map(_ => HttpResponse()).mapMaterializedValue(_ => sys.error("BOOM"))
         val binding = Http(system2).bindAndHandle(flow, hostname, port)(materializer2)
         val b1 = Await.result(binding, 1.seconds.dilated)
@@ -396,8 +395,9 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
       }(materializer2)
 
       "stop stages on failure" in Utils.assertAllStagesStopped {
-        val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+        val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
         val stageCounter = new AtomicLong(0)
+        val cancelCounter = new AtomicLong(0)
         val stage: GraphStage[FlowShape[HttpRequest, HttpResponse]] = new GraphStage[FlowShape[HttpRequest, HttpResponse]] {
           val in = Inlet[HttpRequest]("request.in")
           val out = Outlet[HttpResponse]("response.out")
@@ -409,6 +409,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
             override def postStop(): Unit = stageCounter.decrementAndGet()
             override def onPush(): Unit = push(out, HttpResponse(entity = stageCounter.get().toString))
             override def onPull(): Unit = pull(in)
+            override def onDownstreamFinish(): Unit = cancelCounter.incrementAndGet()
 
             setHandlers(in, out, this)
           }
@@ -426,23 +427,23 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
 
         def performValidRequest() = Http().outgoingConnection(hostname, port).runWith(Source.single(HttpRequest()), Sink.ignore)
 
-        def assertCounters(stage: Int) =
-          eventually(timeout(3.second.dilated)) {
-            stageCounter.get shouldEqual stage
-          }
+        def assertCounters(stage: Int, cancel: Int) = eventually(timeout(1.second.dilated)) {
+          stageCounter.get shouldEqual stage
+          cancelCounter.get shouldEqual cancel
+        }
 
         val bind = Await.result(Http().bindAndHandle(Flow.fromGraph(stage), hostname, port)(materializer2), 1.seconds.dilated)
 
         performValidRequest()
-        assertCounters(0)
+        assertCounters(0, 1)
 
         EventFilter.warning(pattern = "Illegal HTTP message start", occurrences = 1) intercept {
           performFaultyRequest()
-          assertCounters(0)
+          assertCounters(0, 2)
         }
 
         performValidRequest()
-        assertCounters(0)
+        assertCounters(0, 3)
 
         Await.result(bind.unbind(), 1.second.dilated)
       }(materializer2)
@@ -569,7 +570,7 @@ class ClientServerSpec extends AnyWordSpec with Matchers with BeforeAndAfterAll 
       val serverToClientNetworkBufferSize = 1000
       val responseSize = 200000
 
-      val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+      val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
       def request(i: Int) = HttpRequest(uri = s"http://$hostname:$port/$i", headers = headers.Connection("close") :: Nil)
       def response(req: HttpRequest) = HttpResponse(entity = HttpEntity.Strict(ContentTypes.`text/plain(UTF-8)`, ByteString(req.uri.path.toString.takeRight(1) * responseSize)))
 
@@ -623,7 +624,7 @@ Host: example.com
     "complete a request/response over https when request has `Connection: close` set" in Utils.assertAllStagesStopped {
       // akka/akka-http#1219
       val serverToClientNetworkBufferSize = 1000
-      val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+      val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
       val request = HttpRequest(uri = s"https://$hostname:$port", headers = headers.Connection("close") :: Nil)
 
       // settings adapting network buffer sizes
@@ -786,29 +787,6 @@ Host: example.com
 
       Await.result(binding.unbind(), 10.seconds)
     }
-
-    "report idle timeout on request entity stream for stalled client" in Utils.assertAllStagesStopped {
-      val dataProbe = ByteStringSinkProbe()
-
-      def handler(request: HttpRequest): Future[HttpResponse] = {
-        request.entity.dataBytes.runWith(dataProbe.sink)
-        Promise[HttpResponse].future // just let it hanging until idle timeout triggers
-      }
-
-      val settings = ServerSettings(system).mapTimeouts(_.withIdleTimeout(1.second))
-      val binding = Http().bindAndHandleAsync(handler, "127.0.0.1", port = 0, settings = settings).futureValue
-      val uri = "http://" + binding.localAddress.getHostString + ":" + binding.localAddress.getPort
-
-      val dataOutProbe = TestPublisher.probe[ByteString]()
-      Http().singleRequest(HttpRequest(uri = uri, entity = HttpEntity(ContentTypes.`application/octet-stream`, Source.fromPublisher(dataOutProbe))))
-
-      dataProbe.ensureSubscription()
-      dataOutProbe.sendNext(ByteString("test"))
-      dataProbe.expectUtf8EncodedString("test")
-      dataProbe.expectError() should be(an[HttpIdleTimeoutException])
-
-      Await.result(binding.unbind(), 10.seconds)
-    }
   }
 
   override def afterAll() = {
@@ -817,7 +795,7 @@ Host: example.com
   }
 
   class TestSetup {
-    val (hostname, port) = SocketUtil.temporaryServerHostnameAndPort()
+    val (hostname, port) = SocketUtil2.temporaryServerHostnameAndPort()
     def configOverrides = ""
 
     // automatically bind a server
