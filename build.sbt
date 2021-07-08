@@ -41,7 +41,7 @@ lazy val root = Project(
     id = "akka-http-root",
     base = file(".")
   )
-  .enablePlugins(UnidocRoot, NoPublish, DeployRsync, AggregatePRValidation)
+  .enablePlugins(UnidocRoot, NoPublish, DeployRsync/*, AggregatePRValidation*/)
   .disablePlugins(MimaPlugin)
   .settings(
     // Unidoc doesn't like macro definitions
